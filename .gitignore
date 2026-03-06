@@ -8,5 +8,4 @@ models/
 .DS_Store
 mp3_files/
 *.mp3
-*.wav
 app/src-tauri/target/
