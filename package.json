@@ -1,0 +1,47 @@
+{
+  "name": "audio2sheets",
+  "version": "0.0.1",
+  "description": "Convert audio files to sheet music (MusicXML) with AI-powered transcription and instrument separation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "audio2sheets": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "python"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint src/",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "audio",
+    "midi",
+    "musicxml",
+    "sheet-music",
+    "transcription",
+    "basic-pitch",
+    "demucs",
+    "music",
+    "notation"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nicholasgasior/audio2sheets"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.1"
+  }
+}

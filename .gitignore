@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.node
+native/vendor/
+native/build/
+models/
+*.bin
+.DS_Store
+mp3_files/
+*.mp3
+*.wav
+app/src-tauri/target/
