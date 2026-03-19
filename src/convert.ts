@@ -1,4 +1,3 @@
-import { readFileSync } from 'fs'
 import { ensureVenv } from './python-manager'
 import { runPipeline } from './bridge'
 import { REQUIREMENTS_PATH, PYTHON_DIR } from './paths'
@@ -11,43 +10,41 @@ const KEY_TO_FIFTHS: Record<string, number> = {
   'Am': 0, 'Em': 1, 'Bm': 2, 'F#m': 3, 'C#m': 4, 'G#m': 5, 'D#m': 6, 'A#m': 7,
 }
 
-function parseMetadata(stdout: string): ScoreMetadata {
+function parseResult(stdout: string): { midi: string; perfMidi: string; metadata: ScoreMetadata } {
   const lines = stdout.trim().split('\n')
   for (let i = lines.length - 1; i >= 0; i--) {
     try {
       const result = JSON.parse(lines[i])
-      if (result.metadata) {
-        const meta = result.metadata
+      if (result.midi) {
+        const meta = result.metadata || {}
         const keyName = meta.key || 'C'
         const ts = meta.timeSignature || [4, 4]
         return {
-          tempo: meta.tempo || 120,
-          timeSignature: [ts[0], ts[1]] as [number, number],
-          keySignature: KEY_TO_FIFTHS[keyName] ?? 0,
+          midi: result.midi,
+          perfMidi: result.perf_midi || '',
+          metadata: {
+            tempo: meta.tempo || 120,
+            timeSignature: [ts[0], ts[1]] as [number, number],
+            keySignature: KEY_TO_FIFTHS[keyName] ?? 0,
+          },
         }
       }
     } catch {}
   }
-  return { tempo: 120, timeSignature: [4, 4], keySignature: 0 }
+  throw new Error('No valid result JSON in pipeline output')
 }
 
 export async function convertAudioToSheet(
   inputPath: string,
-  outputPath: string,
   options: Audio2SheetsOptions = {},
 ): Promise<Audio2SheetsResult> {
   const venvPython = await ensureVenv(REQUIREMENTS_PATH)
 
-  const stdout = await runPipeline(venvPython, PYTHON_DIR, inputPath, outputPath, (progress) => {
+  const stdout = await runPipeline(venvPython, PYTHON_DIR, inputPath, (progress) => {
     options.onProgress?.(progress.stage as any, progress.percent)
-  })
+  }, options.backend)
 
-  const musicxml = readFileSync(outputPath, 'utf-8')
-  const metadata = parseMetadata(stdout)
+  const { midi, perfMidi, metadata } = parseResult(stdout)
 
-  return {
-    musicxml,
-    stems: ['piano'],
-    metadata,
-  }
+  return { midi, perfMidi, metadata }
 }

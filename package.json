@@ -1,7 +1,7 @@
 {
   "name": "audio2sheets",
   "version": "0.0.1",
-  "description": "Convert audio files to sheet music (MusicXML) with AI-powered transcription and instrument separation",
+  "description": "Convert audio files to MIDI with AI-powered transcription and neural quantization",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
@@ -22,7 +22,6 @@
   "keywords": [
     "audio",
     "midi",
-    "musicxml",
     "sheet-music",
     "transcription",
     "basic-pitch",
@@ -38,8 +37,8 @@
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "@types/node": "^22.16.5",
     "typescript": "^5.8.3",
     "vitest": "^4.0.1"

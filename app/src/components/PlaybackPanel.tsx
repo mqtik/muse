@@ -1,17 +1,34 @@
 import { createSignal, Show, For, onMount, onCleanup } from 'solid-js'
 import WaveSurfer from 'wavesurfer.js'
 import { MidiSynth } from '../lib/midiSynth'
-import { Play, Pause, SkipBack, SkipForward, Volume2, Music } from 'lucide-solid'
+import { Play, Pause, SkipBack, SkipForward, Music } from 'lucide-solid'
 
-type Tab = 'original' | 'transcription' | 'score'
+type Tab = 'original' | 'perf' | 'score'
 
 interface PlaybackPanelProps {
   audioUrl: string
   scoreMidiPath: string | null
   perfMidiPath: string | null
+  instruments?: string[]
 }
 
-const TRACK_COLORS = ['#8b5cf6', '#f59e0b']
+const TRACK_COLORS = [
+  '#8b5cf6', '#f59e0b', '#10b981', '#ef4444', '#3b82f6',
+  '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16',
+  '#a855f7', '#06b6d4', '#e11d48',
+]
+
+const TAB_COLOR: Record<Tab, string> = {
+  original: '#8b5cf6',
+  perf: '#f59e0b',
+  score: '#10b981',
+}
+
+const TAB_LABEL: Record<Tab, string> = {
+  original: 'Original',
+  perf: 'Perf',
+  score: 'Score',
+}
 
 const formatTime = (s: number) => {
   const m = Math.floor(s / 60)
@@ -19,296 +36,335 @@ const formatTime = (s: number) => {
   return `${m}:${sec.toString().padStart(2, '0')}`
 }
 
-function OriginalPlayer(props: { audioUrl: string }) {
+export default function PlaybackPanel(props: PlaybackPanelProps) {
   let waveformRef: HTMLDivElement | undefined
   let ws: WaveSurfer | undefined
-  const [playing, setPlaying] = createSignal(false)
-  const [currentTime, setCurrentTime] = createSignal(0)
-  const [duration, setDuration] = createSignal(0)
-  const [volume, setVolume] = createSignal(0.8)
 
-  onMount(() => {
-    if (!waveformRef) return
-    ws = WaveSurfer.create({
-      container: waveformRef,
-      waveColor: 'rgba(139, 92, 246, 0.4)',
-      progressColor: 'rgba(139, 92, 246, 0.8)',
-      cursorColor: '#8b5cf6',
-      cursorWidth: 2,
-      barWidth: 2,
-      barGap: 1,
-      barRadius: 2,
-      height: 64,
-      normalize: true,
-    })
-    ws.load(props.audioUrl)
-    ws.setVolume(volume())
-    ws.on('ready', () => setDuration(ws!.getDuration()))
-    ws.on('audioprocess', (t: number) => setCurrentTime(t))
-    ws.on('seeking', (t: number) => setCurrentTime(t))
-    ws.on('play', () => setPlaying(true))
-    ws.on('pause', () => setPlaying(false))
-    ws.on('finish', () => setPlaying(false))
-  })
+  const perfSynth = new MidiSynth()
+  const scoreSynth = new MidiSynth()
 
-  onCleanup(() => ws?.destroy())
-
-  const handleVolume = (e: Event) => {
-    const val = parseFloat((e.target as HTMLInputElement).value)
-    setVolume(val)
-    ws?.setVolume(val)
+  const isMultiInstrument = () => {
+    const inst = props.instruments || []
+    return inst.length > 0 && !inst.every((n) => n === 'Left Hand' || n === 'Right Hand')
   }
 
-  return (
-    <>
-      <div ref={waveformRef} class="w-full rounded-xl overflow-hidden" />
-      <div class="flex items-center justify-between text-xs text-text-secondary px-1">
-        <span>{formatTime(currentTime())}</span>
-        <span>{formatTime(duration())}</span>
-      </div>
-      <div class="flex items-center gap-4 justify-center">
-        <button onClick={() => ws?.skip(-5)} class="p-2 rounded-lg glass-hover transition-colors">
-          <SkipBack class="w-4 h-4 text-text-secondary" />
-        </button>
-        <button
-          onClick={() => ws?.playPause()}
-          class="w-10 h-10 rounded-full bg-accent flex items-center justify-center hover:bg-accent/80 transition-colors"
-        >
-          {playing()
-            ? <Pause class="w-5 h-5 text-white" />
-            : <Play class="w-5 h-5 text-white ml-0.5" />
-          }
-        </button>
-        <button onClick={() => ws?.skip(5)} class="p-2 rounded-lg glass-hover transition-colors">
-          <SkipForward class="w-4 h-4 text-text-secondary" />
-        </button>
-        <div class="flex items-center gap-2 ml-4">
-          <Volume2 class="w-4 h-4 text-text-secondary" />
-          <input
-            type="range" min="0" max="1" step="0.01"
-            value={volume()} onInput={handleVolume}
-            class="w-20 accent-accent"
-          />
-        </div>
-      </div>
-    </>
-  )
-}
+  const availableTabs = (): Tab[] => {
+    const tabs: Tab[] = ['original']
+    if (props.perfMidiPath) tabs.push('perf')
+    if (props.scoreMidiPath && !isMultiInstrument()) tabs.push('score')
+    return tabs
+  }
 
-function MidiPlayer(props: { midiPath: string; showTracks: boolean; accentColor: string }) {
-  const synth = new MidiSynth()
+  const defaultTab = () => props.scoreMidiPath ? 'score' as Tab : 'original' as Tab
+  const [activeTab, setActiveTab] = createSignal<Tab>(defaultTab())
+
   const [playing, setPlaying] = createSignal(false)
   const [currentTime, setCurrentTime] = createSignal(0)
   const [duration, setDuration] = createSignal(0)
-  const [volume, setVolume] = createSignal(0.8)
-  const [trackEnabled, setTrackEnabled] = createSignal<boolean[]>([])
-  const [trackNames, setTrackNames] = createSignal<string[]>([])
-  const [trackCounts, setTrackCounts] = createSignal<number[]>([])
-  const [loaded, setLoaded] = createSignal(false)
-  const [loadError, setLoadError] = createSignal<string | null>(null)
 
-  onMount(async () => {
-    try {
-      await synth.loadFile(props.midiPath)
-      setDuration(synth.duration)
-      setTrackNames(synth.parsed.tracks.map((t) => t.name))
-      setTrackCounts(synth.parsed.tracks.map((t) => t.noteCount))
-      setTrackEnabled(synth.parsed.tracks.map(() => true))
-      setLoaded(true)
-      synth.setOnTimeUpdate((t) => setCurrentTime(t))
-      synth.setOnEnd(() => {
-        setPlaying(false)
-        setCurrentTime(0)
+  const [perfLoaded, setPerfLoaded] = createSignal(false)
+  const [scoreLoaded, setScoreLoaded] = createSignal(false)
+  const [perfError, setPerfError] = createSignal<string | null>(null)
+  const [scoreError, setScoreError] = createSignal<string | null>(null)
+
+  const [scoreTrackEnabled, setScoreTrackEnabled] = createSignal<boolean[]>([])
+  const [scoreTrackNames, setScoreTrackNames] = createSignal<string[]>([])
+  const [scoreTrackCounts, setScoreTrackCounts] = createSignal<number[]>([])
+
+  const [wsReady, setWsReady] = createSignal(false)
+  let wsDuration = 0
+
+  const syncWaveformCursor = (midiTime: number) => {
+    if (!ws || wsDuration <= 0) return
+    const ratio = Math.max(0, Math.min(1, midiTime / wsDuration))
+    ws.seekTo(ratio)
+  }
+
+  onMount(() => {
+    if (waveformRef) {
+      ws = WaveSurfer.create({
+        container: waveformRef,
+        waveColor: 'rgba(139, 92, 246, 0.3)',
+        progressColor: 'rgba(139, 92, 246, 0.7)',
+        cursorColor: '#8b5cf6',
+        cursorWidth: 2,
+        barWidth: 2,
+        barGap: 1,
+        barRadius: 2,
+        height: 56,
+        normalize: true,
       })
-    } catch (e: any) {
-      setLoadError(e?.message || String(e))
+      ws.load(props.audioUrl)
+      ws.on('ready', () => {
+        setWsReady(true)
+        wsDuration = ws!.getDuration()
+        if (activeTab() === 'original') setDuration(wsDuration)
+      })
+      ws.on('audioprocess', (t: number) => {
+        if (activeTab() === 'original') setCurrentTime(t)
+      })
+      ws.on('seeking', (t: number) => {
+        if (activeTab() === 'original') setCurrentTime(t)
+      })
+      ws.on('play', () => {
+        if (activeTab() === 'original') setPlaying(true)
+      })
+      ws.on('pause', () => {
+        if (activeTab() === 'original') setPlaying(false)
+      })
+      ws.on('finish', () => {
+        if (activeTab() === 'original') setPlaying(false)
+      })
+    }
+
+    if (props.perfMidiPath) {
+      perfSynth.loadFile(props.perfMidiPath).then(() => {
+        setPerfLoaded(true)
+        perfSynth.setOnTimeUpdate((t) => {
+          if (activeTab() === 'perf') {
+            setCurrentTime(t)
+            syncWaveformCursor(t)
+          }
+        })
+        perfSynth.setOnEnd(() => {
+          if (activeTab() === 'perf') {
+            setPlaying(false)
+            setCurrentTime(0)
+            syncWaveformCursor(0)
+          }
+        })
+        MidiSynth.preloadInstruments(perfSynth.parsed.tracks.map((t) => t.program))
+        if (activeTab() === 'perf') setDuration(perfSynth.duration)
+      }).catch((e: any) => setPerfError(e?.message || String(e)))
+    }
+
+    if (props.scoreMidiPath) {
+      scoreSynth.loadFile(props.scoreMidiPath).then(() => {
+        setScoreLoaded(true)
+        setScoreTrackNames(scoreSynth.parsed.tracks.map((t) => t.name))
+        setScoreTrackCounts(scoreSynth.parsed.tracks.map((t) => t.noteCount))
+        setScoreTrackEnabled(scoreSynth.parsed.tracks.map(() => true))
+        scoreSynth.setOnTimeUpdate((t) => {
+          if (activeTab() === 'score') {
+            setCurrentTime(t)
+            syncWaveformCursor(t)
+          }
+        })
+        scoreSynth.setOnEnd(() => {
+          if (activeTab() === 'score') {
+            setPlaying(false)
+            setCurrentTime(0)
+            syncWaveformCursor(0)
+          }
+        })
+        MidiSynth.preloadInstruments(scoreSynth.parsed.tracks.map((t) => t.program))
+        if (activeTab() === 'score') setDuration(scoreSynth.duration)
+      }).catch((e: any) => setScoreError(e?.message || String(e)))
     }
   })
 
-  onCleanup(() => synth.dispose())
+  onCleanup(() => {
+    ws?.destroy()
+    perfSynth.dispose()
+    scoreSynth.dispose()
+  })
+
+  const pauseAll = () => {
+    ws?.pause()
+    if (perfSynth.playing) perfSynth.pause()
+    if (scoreSynth.playing) scoreSynth.pause()
+    setPlaying(false)
+  }
+
+  const switchTab = (tab: Tab) => {
+    if (tab === activeTab()) return
+    pauseAll()
+    setActiveTab(tab)
+    if (tab === 'original' && ws) {
+      setCurrentTime(ws.getCurrentTime())
+      setDuration(ws.getDuration())
+    } else if (tab === 'perf' && perfLoaded()) {
+      setCurrentTime(perfSynth.getCurrentTime())
+      setDuration(perfSynth.duration)
+      syncWaveformCursor(perfSynth.getCurrentTime())
+    } else if (tab === 'score' && scoreLoaded()) {
+      setCurrentTime(scoreSynth.getCurrentTime())
+      setDuration(scoreSynth.duration)
+      syncWaveformCursor(scoreSynth.getCurrentTime())
+    }
+  }
+
+  const activeSynth = () => activeTab() === 'perf' ? perfSynth : scoreSynth
+
+  const handleWaveformClick = (e: MouseEvent) => {
+    const tab = activeTab()
+    if (tab === 'original') return
+    const rect = waveformRef!.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
+    const synth = activeSynth()
+    const t = pct * synth.duration
+    synth.seekTo(t)
+    setCurrentTime(t)
+    syncWaveformCursor(t)
+  }
 
   const togglePlay = async () => {
+    const tab = activeTab()
     if (playing()) {
-      synth.pause()
-      setPlaying(false)
+      pauseAll()
+      return
+    }
+    if (tab === 'original' && ws) {
+      ws.playPause()
     } else {
+      const synth = activeSynth()
+      synth.initAudioContext()
       await synth.play(synth.getCurrentTime())
-      synth.setVolume(volume())
-      trackEnabled().forEach((enabled, i) => synth.setTrackEnabled(i, enabled))
+      synth.setVolume(0.8)
+      if (tab === 'score') {
+        scoreTrackEnabled().forEach((enabled, i) => synth.setTrackEnabled(i, enabled))
+      }
       setPlaying(true)
     }
   }
 
-  const handleSeek = (e: MouseEvent) => {
-    const bar = e.currentTarget as HTMLDivElement
-    const rect = bar.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-    const t = pct * duration()
-    synth.seekTo(t)
-    setCurrentTime(t)
+  const skipBack = () => {
+    const tab = activeTab()
+    if (tab === 'original' && ws) {
+      ws.skip(-5)
+    } else {
+      const synth = activeSynth()
+      const t = Math.max(0, currentTime() - 5)
+      synth.seekTo(t)
+      setCurrentTime(t)
+      syncWaveformCursor(t)
+    }
+  }
+
+  const skipForward = () => {
+    const tab = activeTab()
+    if (tab === 'original' && ws) {
+      ws.skip(5)
+    } else {
+      const synth = activeSynth()
+      const t = Math.min(duration(), currentTime() + 5)
+      synth.seekTo(t)
+      setCurrentTime(t)
+      syncWaveformCursor(t)
+    }
   }
 
   const toggleTrack = (index: number) => {
-    const current = trackEnabled()
+    const current = scoreTrackEnabled()
     const updated = [...current]
     updated[index] = !updated[index]
-    setTrackEnabled(updated)
-    synth.setTrackEnabled(index, updated[index])
+    setScoreTrackEnabled(updated)
+    scoreSynth.setTrackEnabled(index, updated[index])
   }
 
-  const handleVolume = (e: Event) => {
-    const val = parseFloat((e.target as HTMLInputElement).value)
-    setVolume(val)
-    synth.setVolume(val)
+  const color = () => TAB_COLOR[activeTab()]
+
+  const isReady = () => {
+    const tab = activeTab()
+    if (tab === 'original') return wsReady()
+    if (tab === 'perf') return perfLoaded()
+    return scoreLoaded()
   }
 
-  const progress = () => (duration() > 0 ? (currentTime() / duration()) * 100 : 0)
-  const loading = () => !loaded() && !loadError()
+  const activeError = () => {
+    const tab = activeTab()
+    if (tab === 'perf') return perfError()
+    if (tab === 'score') return scoreError()
+    return null
+  }
+
+  const showTracks = () => activeTab() === 'score' && scoreTrackNames().length > 1
 
   return (
-    <>
-      <Show when={loadError()}>
-        <div class="flex items-center gap-2 text-red-400 text-xs py-4">
-          <span class="font-medium">MIDI load failed:</span>
-          <span class="opacity-70">{loadError()}</span>
+    <div class="flex flex-col gap-5 w-full max-w-lg mx-auto">
+      <div class="flex items-center justify-center">
+        <div class="flex items-center gap-1 p-1 rounded-xl" style={{ background: 'rgba(255,255,255,0.05)' }}>
+          <For each={availableTabs()}>
+            {(tab) => (
+              <button
+                onClick={() => switchTab(tab)}
+                class="px-4 py-1.5 rounded-lg text-sm font-medium transition-all"
+                style={{
+                  background: activeTab() === tab ? `${TAB_COLOR[tab]}20` : 'transparent',
+                  color: activeTab() === tab ? TAB_COLOR[tab] : 'rgba(255,255,255,0.4)',
+                }}
+              >
+                {TAB_LABEL[tab]}
+              </button>
+            )}
+          </For>
+        </div>
+      </div>
+
+      <Show when={activeError()}>
+        <div class="text-red-400 text-xs text-center">
+          MIDI load failed: {activeError()}
         </div>
       </Show>
 
-      <Show when={!loadError()}>
-        <Show when={props.showTracks && trackNames().length > 1}>
-          <div class="flex items-center gap-1.5">
-            <For each={trackNames()}>
+      <div class="w-full" onClick={handleWaveformClick}>
+        <div
+          ref={waveformRef}
+          class="w-full rounded-xl overflow-hidden transition-opacity duration-200"
+          style={{ opacity: wsReady() ? 1 : 0.3 }}
+        />
+      </div>
+
+      <div class="flex items-center justify-between text-xs text-text-secondary px-1 -mt-3">
+        <span>{formatTime(currentTime())}</span>
+        <span>{formatTime(duration())}</span>
+      </div>
+
+      <div class="flex items-center gap-6 justify-center">
+        <button onClick={skipBack} class="p-2 rounded-full transition-colors hover:bg-white/5">
+          <SkipBack class="w-5 h-5 text-text-secondary" />
+        </button>
+        <button
+          onClick={togglePlay}
+          disabled={!isReady()}
+          class="w-14 h-14 rounded-full flex items-center justify-center transition-colors disabled:opacity-40"
+          style={{ background: color() }}
+        >
+          {playing()
+            ? <Pause class="w-6 h-6 text-white" />
+            : <Play class="w-6 h-6 text-white ml-0.5" />
+          }
+        </button>
+        <button onClick={skipForward} class="p-2 rounded-full transition-colors hover:bg-white/5">
+          <SkipForward class="w-5 h-5 text-text-secondary" />
+        </button>
+      </div>
+
+      <div
+        class="grid transition-[grid-template-rows] duration-300 ease-out"
+        style={{ 'grid-template-rows': showTracks() ? '1fr' : '0fr' }}
+      >
+        <div class="overflow-hidden">
+          <div class="flex items-center justify-center gap-1.5 flex-wrap pt-1">
+            <For each={scoreTrackNames()}>
               {(name, i) => (
                 <button
                   onClick={() => toggleTrack(i())}
-                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+                  class="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium transition-all"
                   style={{
-                    background: trackEnabled()[i()] ? `${TRACK_COLORS[i()]}20` : 'rgba(255,255,255,0.03)',
-                    color: trackEnabled()[i()] ? TRACK_COLORS[i()] : 'rgba(255,255,255,0.3)',
-                    border: `1px solid ${trackEnabled()[i()] ? `${TRACK_COLORS[i()]}40` : 'rgba(255,255,255,0.06)'}`,
+                    background: scoreTrackEnabled()[i()] ? `${TRACK_COLORS[i()]}20` : 'rgba(255,255,255,0.03)',
+                    color: scoreTrackEnabled()[i()] ? TRACK_COLORS[i()] : 'rgba(255,255,255,0.3)',
                   }}
                 >
                   <Music style={{ width: '12px', height: '12px' }} />
                   {name}
-                  <span style={{ opacity: 0.6 }}>({trackCounts()[i()]})</span>
+                  <span style={{ opacity: 0.6 }}>({scoreTrackCounts()[i()]})</span>
                 </button>
               )}
             </For>
           </div>
-        </Show>
-
-        <div
-          class="w-full h-8 rounded-lg bg-white/5 cursor-pointer relative overflow-hidden"
-          onClick={handleSeek}
-        >
-          <div
-            class="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-100"
-            style={{ width: `${progress()}%`, background: `${props.accentColor}30` }}
-          />
-          <div
-            class="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full shadow-lg transition-[left] duration-100"
-            style={{ left: `calc(${progress()}% - 6px)`, background: props.accentColor }}
-          />
         </div>
-
-        <div class="flex items-center justify-between text-xs text-text-secondary px-1">
-          <span>{formatTime(currentTime())}</span>
-          <span>{formatTime(duration())}</span>
-        </div>
-
-        <div class="flex items-center gap-4 justify-center">
-          <button onClick={() => { const t = Math.max(0, currentTime() - 5); synth.seekTo(t); setCurrentTime(t) }} class="p-2 rounded-lg glass-hover transition-colors">
-            <SkipBack class="w-4 h-4 text-text-secondary" />
-          </button>
-          <button
-            onClick={togglePlay}
-            disabled={loading()}
-            class="w-10 h-10 rounded-full flex items-center justify-center transition-colors disabled:opacity-40"
-            style={{ background: props.accentColor }}
-          >
-            {loading() ? (
-              <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : playing() ? (
-              <Pause class="w-5 h-5 text-white" />
-            ) : (
-              <Play class="w-5 h-5 text-white ml-0.5" />
-            )}
-          </button>
-          <button onClick={() => { const t = Math.min(duration(), currentTime() + 5); synth.seekTo(t); setCurrentTime(t) }} class="p-2 rounded-lg glass-hover transition-colors">
-            <SkipForward class="w-4 h-4 text-text-secondary" />
-          </button>
-          <div class="flex items-center gap-2 ml-4">
-            <Volume2 class="w-4 h-4 text-text-secondary" />
-            <input
-              type="range" min="0" max="1" step="0.01"
-              value={volume()} onInput={handleVolume}
-              class="w-20"
-              style={{ "accent-color": props.accentColor }}
-            />
-          </div>
-        </div>
-      </Show>
-    </>
-  )
-}
-
-export default function PlaybackPanel(props: PlaybackPanelProps) {
-  const hasPerfMidi = () => !!props.perfMidiPath
-  const hasScoreMidi = () => !!props.scoreMidiPath
-
-  const availableTabs = (): Tab[] => {
-    const tabs: Tab[] = ['original']
-    if (hasPerfMidi()) tabs.push('transcription')
-    if (hasScoreMidi()) tabs.push('score')
-    return tabs
-  }
-
-  const defaultTab = () => hasScoreMidi() ? 'score' as Tab : 'original' as Tab
-  const [activeTab, setActiveTab] = createSignal<Tab>(defaultTab())
-
-  const tabLabels: Record<Tab, string> = {
-    original: 'Original',
-    transcription: 'Transcription',
-    score: 'Score',
-  }
-
-  const tabColors: Record<Tab, string> = {
-    original: '#8b5cf6',
-    transcription: '#f59e0b',
-    score: '#10b981',
-  }
-
-  return (
-    <div class="glass rounded-2xl p-4 flex flex-col gap-3">
-      <div class="flex items-center gap-1.5">
-        <For each={availableTabs()}>
-          {(tab) => (
-            <button
-              onClick={() => setActiveTab(tab)}
-              class="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
-              style={{
-                background: activeTab() === tab ? `${tabColors[tab]}20` : 'transparent',
-                color: activeTab() === tab ? tabColors[tab] : 'rgba(255,255,255,0.4)',
-                border: `1px solid ${activeTab() === tab ? `${tabColors[tab]}40` : 'rgba(255,255,255,0.06)'}`,
-              }}
-            >
-              {tabLabels[tab]}
-            </button>
-          )}
-        </For>
       </div>
-
-      <Show when={activeTab() === 'original'}>
-        <OriginalPlayer audioUrl={props.audioUrl} />
-      </Show>
-
-      <Show when={activeTab() === 'transcription' && props.perfMidiPath}>
-        <MidiPlayer midiPath={props.perfMidiPath!} showTracks={false} accentColor="#f59e0b" />
-      </Show>
-
-      <Show when={activeTab() === 'score' && props.scoreMidiPath}>
-        <MidiPlayer midiPath={props.scoreMidiPath!} showTracks={true} accentColor="#10b981" />
-      </Show>
     </div>
   )
 }

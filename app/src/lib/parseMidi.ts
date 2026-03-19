@@ -9,6 +9,7 @@ export interface MidiNote {
 export interface MidiTrackInfo {
   name: string
   noteCount: number
+  program: number
 }
 
 export interface ParsedMidi {
@@ -69,6 +70,7 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
     noteOns: Array<{ pitch: number; tick: number; vel: number }>
     noteOffs: Array<{ pitch: number; tick: number }>
     name: string
+    program: number
   }> = []
 
   for (let t = 0; t < nTracks; t++) {
@@ -78,6 +80,7 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
     let tick = 0
     let running = 0
     let name = ''
+    let program = 0
     const noteOns: Array<{ pitch: number; tick: number; vel: number }> = []
     const noteOffs: Array<{ pitch: number; tick: number }> = []
 
@@ -122,7 +125,9 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
           const pitch = buf[p++]
           p++
           noteOffs.push({ pitch, tick })
-        } else if (hi === 0xc0 || hi === 0xd0) {
+        } else if (hi === 0xc0) {
+          program = buf[p++]
+        } else if (hi === 0xd0) {
           p++
         } else {
           p += 2
@@ -130,7 +135,7 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
       }
     }
 
-    rawTracks.push({ noteOns, noteOffs, name })
+    rawTracks.push({ noteOns, noteOffs, name, program })
   }
 
   tempoMap.sort((a, b) => a.tick - b.tick)
@@ -138,6 +143,7 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
   const notes: MidiNote[] = []
   const trackNames: string[] = []
   const trackNoteCounts: number[] = []
+  const trackPrograms: number[] = []
 
   for (let t = 0; t < rawTracks.length; t++) {
     const track = rawTracks[t]
@@ -176,6 +182,7 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
     if (t > 0 || nTracks === 1) {
       trackNames.push(track.name || `Track ${t}`)
       trackNoteCounts.push(noteCount)
+      trackPrograms.push(track.program)
     }
   }
 
@@ -185,7 +192,7 @@ export function parseMidiBytes(buf: Uint8Array): ParsedMidi {
 
   return {
     notes: notes.sort((a, b) => a.startTime - b.startTime),
-    tracks: trackNames.map((name, i) => ({ name, noteCount: trackNoteCounts[i] })),
+    tracks: trackNames.map((name, i) => ({ name, noteCount: trackNoteCounts[i], program: trackPrograms[i] })),
     duration,
     tempo,
     ppq,

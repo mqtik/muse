@@ -1,27 +1,47 @@
 import { For } from 'solid-js'
 import { Check } from 'lucide-solid'
+import type { Backend } from '../stores/appStore'
 
-const STAGES = [
+interface Stage {
+  id: string
+  label: string
+}
+
+const TRANSKUN_STAGES: Stage[] = [
   { id: 'separating', label: 'Isolating piano' },
   { id: 'transcribing', label: 'Transcribing notes' },
   { id: 'quantizing', label: 'Quantizing rhythm' },
-  { id: 'generating', label: 'Generating sheet music' },
 ]
 
-const STAGE_ORDER = ['separating', 'transcribing', 'quantizing', 'generating', 'done']
+const YOURMT3_STAGES: Stage[] = [
+  { id: 'loading_model', label: 'Loading transcription model' },
+  { id: 'preparing_audio', label: 'Preparing audio' },
+  { id: 'transcribing', label: 'Transcribing instruments' },
+  { id: 'extracting_notes', label: 'Extracting notes' },
+  { id: 'writing_midi', label: 'Generating MIDI' },
+]
+
+function stageOrder(backend: Backend): string[] {
+  if (backend === 'yourmt3') return ['loading_model', 'preparing_audio', 'transcribing', 'extracting_notes', 'writing_midi', 'done']
+  return ['separating', 'transcribing', 'quantizing', 'done']
+}
 
 interface ProgressStepsProps {
   currentStage: string | null
+  backend?: Backend
 }
 
 export default function ProgressSteps(props: ProgressStepsProps) {
-  const currentIndex = () => STAGE_ORDER.indexOf(props.currentStage || '')
+  const backend = () => props.backend || 'transkun'
+  const stages = () => backend() === 'yourmt3' ? YOURMT3_STAGES : TRANSKUN_STAGES
+  const order = () => stageOrder(backend())
+  const currentIndex = () => order().indexOf(props.currentStage || '')
 
   return (
     <div class="flex flex-col gap-3">
-      <For each={STAGES}>
+      <For each={stages()}>
         {(step) => {
-          const stepIndex = () => STAGE_ORDER.indexOf(step.id)
+          const stepIndex = () => order().indexOf(step.id)
           const isComplete = () => currentIndex() > stepIndex()
           const isCurrent = () => props.currentStage === step.id
 

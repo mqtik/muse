@@ -26,7 +26,7 @@ function parseMetadata(stdout: string) {
 describe('metadata parsing', () => {
   it('parses valid pipeline output', () => {
     const stdout = JSON.stringify({
-      output: '/tmp/out.musicxml',
+      midi: '/tmp/out.mid',
       metadata: { key: 'G', timeSignature: [3, 4] },
     })
     const meta = parseMetadata(stdout)
@@ -35,7 +35,7 @@ describe('metadata parsing', () => {
   })
 
   it('defaults on missing metadata', () => {
-    const stdout = JSON.stringify({ output: '/tmp/out.musicxml' })
+    const stdout = JSON.stringify({ midi: '/tmp/out.mid' })
     const meta = parseMetadata(stdout)
     expect(meta.keySignature).toBe(0)
     expect(meta.timeSignature).toEqual([4, 4])
@@ -60,5 +60,14 @@ describe('metadata parsing', () => {
     expect(parseMetadata(JSON.stringify({ metadata: { key: 'Am' } })).keySignature).toBe(0)
     expect(parseMetadata(JSON.stringify({ metadata: { key: 'Em' } })).keySignature).toBe(1)
     expect(parseMetadata(JSON.stringify({ metadata: { key: 'Dm' } })).keySignature).toBe(-1)
+  })
+
+  it('parses instruments from metadata', () => {
+    const stdout = JSON.stringify({
+      midi: '/tmp/out.mid',
+      metadata: { key: 'C', instruments: ['Piano', 'Violin', 'Cello'] },
+    })
+    const result = JSON.parse(stdout)
+    expect(result.metadata.instruments).toEqual(['Piano', 'Violin', 'Cello'])
   })
 })

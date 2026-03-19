@@ -10,10 +10,11 @@ export function runPipeline(
   venvPython: string,
   pythonDir: string,
   inputPath: string,
-  outputPath: string,
   onProgress?: (progress: PipelineProgress) => void,
+  backend?: string,
 ): Promise<string> {
-  return runPythonScript(venvPython, pythonDir, 'pipeline', inputPath, outputPath, onProgress)
+  const extraArgs = backend ? ['--backend', backend] : []
+  return runPythonScript(venvPython, pythonDir, 'pipeline', inputPath, undefined, onProgress, extraArgs)
 }
 
 export function runPythonScript(
@@ -23,12 +24,14 @@ export function runPythonScript(
   inputPath?: string,
   outputPath?: string,
   onProgress?: (progress: PipelineProgress) => void,
+  extraArgs?: string[],
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     const scriptPath = join(pythonDir, `${scriptName}.py`)
     const args = [scriptPath]
     if (inputPath) args.push(inputPath)
     if (outputPath) args.push('-o', outputPath)
+    if (extraArgs) args.push(...extraArgs)
 
     const proc = spawn(venvPython, args)
 

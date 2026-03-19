@@ -13,7 +13,6 @@ pub struct PipelineProgress {
 
 #[derive(Clone, Serialize)]
 pub struct PipelineResult {
-    pub musicxml: String,
     pub metadata: PipelineMetadata,
     pub midi_path: Option<String>,
     pub perf_midi_path: Option<String>,
@@ -26,6 +25,8 @@ pub struct PipelineMetadata {
     pub time_signature: Vec<u32>,
     #[serde(default = "default_tempo")]
     pub tempo: u32,
+    #[serde(default)]
+    pub instruments: Vec<String>,
 }
 
 fn default_tempo() -> u32 {
@@ -39,9 +40,7 @@ struct PythonProgress {
 }
 
 #[derive(Deserialize)]
-#[allow(dead_code)]
 struct PythonResult {
-    output: Option<String>,
     midi: Option<String>,
     perf_midi: Option<String>,
     metadata: Option<PipelineMetadata>,
@@ -51,7 +50,7 @@ struct PythonResult {
 pub async fn start_pipeline(
     app: AppHandle,
     input: String,
-    output: String,
+    backend: Option<String>,
     solo_piano: Option<bool>,
 ) -> Result<PipelineResult, String> {
     let venv_python = get_venv_python();
@@ -71,9 +70,11 @@ pub async fn start_pipeline(
     let mut args = vec![
         script.to_str().unwrap().to_string(),
         input.clone(),
-        "-o".to_string(),
-        output.clone(),
     ];
+    if let Some(ref b) = backend {
+        args.push("--backend".to_string());
+        args.push(b.clone());
+    }
     if solo_piano.unwrap_or(false) {
         args.push("--solo-piano".to_string());
     }
@@ -141,6 +142,7 @@ pub async fn start_pipeline(
         key: "C".to_string(),
         time_signature: vec![4, 4],
         tempo: 120,
+        instruments: vec![],
     };
     let mut midi_path: Option<String> = None;
     let mut perf_midi_path: Option<String> = None;
@@ -160,15 +162,12 @@ pub async fn start_pipeline(
         }
     }
 
-    let musicxml = std::fs::read_to_string(&output)
-        .map_err(|e| format!("Failed to read output MusicXML: {}", e))?;
-
     let _ = app.emit("pipeline:progress", PipelineProgress {
         stage: "done".to_string(),
         percent: 100,
     });
 
-    Ok(PipelineResult { musicxml, metadata, midi_path, perf_midi_path })
+    Ok(PipelineResult { metadata, midi_path, perf_midi_path })
 }
 
 #[tauri::command]

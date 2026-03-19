@@ -59,6 +59,71 @@ html, body, #root {
   animation: pulse-border 2s ease-in-out infinite;
 }
 
+.aurora-footer {
+  position: absolute;
+  bottom: -60px;
+  width: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.aurora-light {
+  border-radius: 50%;
+  height: 20px;
+  width: 100%;
+  position: relative;
+  margin: auto;
+}
+
+.aurora-one {
+  animation: aurora-one 5s ease-in-out infinite alternate;
+}
+
+.aurora-two {
+  width: 90%;
+  animation: aurora-two 4s ease-in-out infinite alternate;
+}
+
+.aurora-three {
+  width: 80%;
+  animation: aurora-three 3s ease-in-out infinite alternate;
+}
+
+.aurora-four {
+  width: 70%;
+  animation: aurora-four 2s ease-in-out infinite alternate;
+}
+
+.aurora-five {
+  width: 60%;
+  animation: aurora-five 1s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-one {
+  from { box-shadow: 0 0 250px 20px #473C78; }
+  to { box-shadow: 0 0 100px 15px #7c3aed; }
+}
+
+@keyframes aurora-two {
+  from { box-shadow: 0 0 250px 20px #6d28d9; }
+  to { box-shadow: 0 0 100px 15px #e0d4fc; }
+}
+
+@keyframes aurora-three {
+  from { box-shadow: 0 0 250px 20px #a78bfa; }
+  to { box-shadow: 0 0 100px 15px #ffffff; }
+}
+
+@keyframes aurora-four {
+  from { box-shadow: 0 0 250px 20px #5b21b6; }
+  to { box-shadow: 0 0 100px 15px #c4b5fd; }
+}
+
+@keyframes aurora-five {
+  from { box-shadow: 0 0 250px 20px #8b5cf6; }
+  to { box-shadow: 0 0 100px 15px #f5f3ff; }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

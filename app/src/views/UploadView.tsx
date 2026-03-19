@@ -1,12 +1,16 @@
-import { createSignal, For, onMount } from 'solid-js'
+import { createSignal, createEffect, Show, onMount } from 'solid-js'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { navigateTo, setInput } from '../stores/appStore'
+import { navigateTo, setInput, setActiveBackend, pendingPreview, clearPendingPreview, type Backend } from '../stores/appStore'
 import { resetPipeline, updateProgress, setPipelineResult, setPipelineError } from '../stores/pipelineStore'
 import { startPipeline } from '../lib/commands'
 import { onPipelineProgress } from '../lib/events'
 import DropZone from '../components/DropZone'
-import RecordButton from '../components/RecordButton'
-import { Clock } from 'lucide-solid'
+import PreviewModal from '../components/PreviewModal'
+import QuickPlayModal from '../components/QuickPlayModal'
+import RecordTab from '../components/RecordTab'
+import TopTabBar, { type TabItem } from '../components/TopTabBar'
+import AuroraFooter from '../components/AuroraFooter'
+import { Music, Mic, Link } from 'lucide-solid'
 
 interface RecentFile {
   name: string
@@ -14,15 +18,37 @@ interface RecentFile {
   date: string
 }
 
+interface PendingFile {
+  path: string
+  name: string
+  audioUrl: string
+}
+
+const tabs: TabItem[] = [
+  { id: 'record', label: 'Record', icon: <Mic class="w-5 h-5" /> },
+  { id: 'audio', label: 'Audio', icon: <Music class="w-5 h-5" /> },
+  { id: 'embed', label: 'Embed', icon: <Link class="w-5 h-5" /> },
+]
+
 export default function UploadView() {
   const [recentFiles, setRecentFiles] = createSignal<RecentFile[]>([])
-  const [soloPiano, setSoloPiano] = createSignal(false)
+  const [pendingFile, setPendingFile] = createSignal<PendingFile | null>(null)
+  const [activeTab, setActiveTab] = createSignal('record')
+  const [showQuickPlay, setShowQuickPlay] = createSignal(false)
 
   onMount(() => {
     try {
       const stored = localStorage.getItem('muse:recent')
       if (stored) setRecentFiles(JSON.parse(stored))
     } catch {}
+  })
+
+  createEffect(() => {
+    const preview = pendingPreview()
+    if (preview) {
+      setPendingFile({ path: preview.path, name: preview.name, audioUrl: preview.audioUrl })
+      clearPendingPreview()
+    }
   })
 
   const addRecent = (path: string, name: string) => {
@@ -33,19 +59,27 @@ export default function UploadView() {
     localStorage.setItem('muse:recent', JSON.stringify(updated))
   }
 
-  const handleFile = async (path: string, name: string) => {
+  const openPreview = (path: string, name: string) => {
     const audioUrl = convertFileSrc(path)
-    setInput(path, name, audioUrl)
-    addRecent(path, name)
+    setPendingFile({ path, name, audioUrl })
+  }
+
+  const handleConfirm = async (backend: Backend) => {
+    const file = pendingFile()
+    if (!file) return
+
+    setPendingFile(null)
+    setInput(file.path, file.name, file.audioUrl)
+    setActiveBackend(backend)
+    addRecent(file.path, file.name)
     resetPipeline()
     navigateTo('processing')
 
     const unsub = await onPipelineProgress((p) => updateProgress(p.stage, p.percent))
 
-    const output = path.replace(/\.[^.]+$/, '.musicxml')
     try {
-      const result = await startPipeline(path, output, soloPiano())
-      setPipelineResult(result.musicxml, result.metadata, result.midi_path ?? undefined, result.perf_midi_path ?? undefined)
+      const result = await startPipeline(file.path, backend, backend === 'transkun')
+      setPipelineResult(result.metadata, result.midi_path ?? undefined, result.perf_midi_path ?? undefined)
       navigateTo('result')
     } catch (e: any) {
       setPipelineError(typeof e === 'string' ? e : e.message || 'Pipeline failed')
@@ -54,58 +88,57 @@ export default function UploadView() {
     }
   }
 
-  const handleRecord = () => navigateTo('recording')
+  const handleClose = () => setPendingFile(null)
 
   return (
-    <div class="flex-1 flex flex-col items-center justify-center gap-8 p-8 animate-fade-in">
-      <div class="w-full max-w-md">
-        <DropZone onFile={handleFile} />
+    <div class="flex-1 flex flex-col relative overflow-hidden">
+      <TopTabBar tabs={tabs} activeTab={activeTab()} onSelect={setActiveTab} />
+
+      <div class="flex-1 flex flex-col items-center justify-center gap-8 p-8 relative z-[1]">
+        <Show when={activeTab() === 'audio'}>
+          <div class="w-full max-w-md">
+            <DropZone onFile={openPreview} onQuickPlay={() => setShowQuickPlay(true)} />
+          </div>
+        </Show>
+
+        <Show when={activeTab() === 'record'}>
+          <RecordTab onRecordingComplete={(path, name, audioUrl) => setPendingFile({ path, name, audioUrl })} />
+        </Show>
+
+        <Show when={activeTab() === 'embed'}>
+          <div class="flex flex-col items-center gap-4 text-center">
+            <div class="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center">
+              <Link class="w-8 h-8 text-accent/50" />
+            </div>
+            <p class="text-lg font-medium text-text-secondary">Under Construction</p>
+            <p class="text-sm text-text-secondary/60">
+              Paste a YouTube or Spotify link to transcribe
+            </p>
+          </div>
+        </Show>
       </div>
 
-      <label class="flex items-center gap-3 cursor-pointer select-none">
-        <div
-          class="relative w-10 h-5 rounded-full transition-colors"
-          style={{ background: soloPiano() ? '#10b981' : 'rgba(255,255,255,0.1)' }}
-          onClick={() => setSoloPiano(!soloPiano())}
-        >
-          <div
-            class="absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-[left] duration-150"
-            style={{ left: soloPiano() ? '22px' : '2px' }}
+      <AuroraFooter />
+
+      <Show when={showQuickPlay()}>
+        <QuickPlayModal
+          recentFiles={recentFiles()}
+          builtInFiles={[]}
+          onSelect={(path, name) => { setShowQuickPlay(false); openPreview(path, name) }}
+          onClose={() => setShowQuickPlay(false)}
+        />
+      </Show>
+
+      <Show when={pendingFile()}>
+        {(file) => (
+          <PreviewModal
+            audioUrl={file().audioUrl}
+            name={file().name}
+            onConfirm={handleConfirm}
+            onClose={handleClose}
           />
-        </div>
-        <span class="text-sm text-text-secondary">
-          Solo piano <span style={{ opacity: 0.5 }}>(skip source separation)</span>
-        </span>
-      </label>
-
-      <div class="flex items-center gap-4 text-text-secondary text-sm">
-        <div class="w-12 h-px bg-border-glass" />
-        <span>or</span>
-        <div class="w-12 h-px bg-border-glass" />
-      </div>
-
-      <RecordButton onClick={handleRecord} />
-
-      {recentFiles().length > 0 && (
-        <div class="w-full max-w-lg mt-4">
-          <div class="flex items-center gap-2 mb-3">
-            <Clock class="w-3.5 h-3.5 text-text-secondary" />
-            <span class="text-xs font-semibold uppercase tracking-wider text-text-secondary">Recent</span>
-          </div>
-          <div class="flex gap-2 overflow-x-auto pb-2">
-            <For each={recentFiles()}>
-              {(file) => (
-                <button
-                  onClick={() => handleFile(file.path, file.name)}
-                  class="glass glass-hover rounded-xl px-4 py-2 text-sm whitespace-nowrap transition-colors flex-shrink-0"
-                >
-                  {file.name}
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
-      )}
+        )}
+      </Show>
     </div>
   )
 }

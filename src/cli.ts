@@ -10,10 +10,9 @@ import { REQUIREMENTS_PATH, PYTHON_DIR } from './paths'
 const SUPPORTED_FORMATS = ['.mp3', '.wav', '.ogg', '.flac']
 
 const COMMANDS: Record<string, string> = {
-  convert:    'Full pipeline: audio → MusicXML (default)',
+  convert:    'Full pipeline: audio → MIDI (default)',
   transcribe: 'Audio → raw note events (JSON)',
   quantize:   'Note events JSON → quantized score (JSON)',
-  toxml:      'Quantized score JSON → MusicXML',
   separate:   'Audio → stem WAV files (Demucs)',
   setup:      'Force (re)install Python dependencies',
   info:       'Show venv path, installed packages, GPU info',
@@ -21,11 +20,11 @@ const COMMANDS: Record<string, string> = {
 
 function printUsage() {
   console.log(`
-audio2sheets - Convert audio files to sheet music
+audio2sheets - Convert audio files to MIDI
 
 Usage:
-  audio2sheets <input.mp3> [-o output.musicxml]    Full pipeline (default)
-  audio2sheets <command> [args]                     Run a specific stage
+  audio2sheets <input.mp3>                           Full pipeline (default)
+  audio2sheets <command> [args]                      Run a specific stage
 
 Commands:`)
   for (const [cmd, desc] of Object.entries(COMMANDS)) {
@@ -33,21 +32,19 @@ Commands:`)
   }
   console.log(`
 Options:
-  -o, --output <path>   Output file path
+  --backend <backend>   Transcription backend: transkun (default) or yourmt3
   --json                Output raw JSON instead of formatted text
   -h, --help            Show this help
   --version             Show version
 
 Examples:
-  audio2sheets song.mp3                            Full pipeline → song.musicxml
-  audio2sheets song.mp3 -o score.musicxml          Full pipeline with custom output
-  audio2sheets transcribe song.mp3                 Just transcription → notes JSON
-  audio2sheets transcribe song.mp3 -o notes.json   Save transcription to file
-  audio2sheets quantize notes.json -o score.json   Quantize note events
-  audio2sheets toxml score.json -o sheet.musicxml  Generate MusicXML from score
-  audio2sheets separate song.mp3 -o ./stems/       Separate into stems
-  audio2sheets setup                               Reinstall Python deps
-  audio2sheets info                                Show environment info
+  audio2sheets song.mp3                              Full pipeline → song.mid
+  audio2sheets transcribe song.mp3                   Just transcription → notes JSON
+  audio2sheets transcribe song.mp3 -o notes.json     Save transcription to file
+  audio2sheets quantize notes.json -o score.json     Quantize note events
+  audio2sheets separate song.mp3 -o ./stems/         Separate into stems
+  audio2sheets setup                                 Reinstall Python deps
+  audio2sheets info                                  Show environment info
 `)
 }
 
@@ -59,6 +56,8 @@ function parseArgs(args: string[]) {
     const arg = args[i]
     if (arg === '-o' || arg === '--output') {
       flags.output = args[++i]
+    } else if (arg === '--backend') {
+      flags.backend = args[++i]
     } else if (arg === '--json') {
       flags.json = true
     } else if (arg === '-h' || arg === '--help') {
@@ -134,16 +133,6 @@ async function main() {
         break
       }
 
-      case 'toxml': {
-        requireInput(inputPath)
-        const out = outputPath || resolve(basename(inputPath, extname(inputPath)) + '.musicxml')
-        console.log(`[audio2sheets] Generating MusicXML from ${basename(inputPath)}...`)
-        const venv = await ensureVenv(REQUIREMENTS_PATH)
-        const result = await runPythonScript(venv, PYTHON_DIR, 'toxml', inputPath, out)
-        console.log(result || `[audio2sheets] Done → ${out}`)
-        break
-      }
-
       case 'separate': {
         requireInput(inputPath)
         const out = outputPath || resolve('stems')
@@ -163,16 +152,22 @@ async function main() {
           process.exit(1)
         }
 
-        const out = outputPath || resolve(basename(inputPath, extname(inputPath)) + '.musicxml')
         console.log(`[audio2sheets] Processing ${basename(inputPath)}...`)
 
-        await convertAudioToSheet(inputPath, out, {
+        const backend = flags.backend as string | undefined
+        if (backend && backend !== 'transkun' && backend !== 'yourmt3') {
+          console.error(`[audio2sheets] Invalid backend: ${backend}. Use 'transkun' or 'yourmt3'.`)
+          process.exit(1)
+        }
+
+        const result = await convertAudioToSheet(inputPath, {
+          backend: backend as any,
           onProgress: (stage, percent) => {
             process.stdout.write(`\r[audio2sheets] ${stage}... ${percent}%`)
           },
         })
 
-        console.log(`\n[audio2sheets] Done → ${out}`)
+        console.log(`\n[audio2sheets] Done → ${result.midi}`)
         break
       }
     }

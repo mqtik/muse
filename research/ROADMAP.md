@@ -4,49 +4,45 @@ Prioritized by impact on output quality. Each phase builds on the previous.
 
 ---
 
-## Phase 1: Quantized, Readable Sheet Music
+## Phase 1: Core Pipeline ✅
 
-**Goal**: Transform output from unreadable noise into usable notation.
+**Goal**: Accurate transcription with hand splitting and sustain pedal.
 
-### 1.1 Wire PM2S into `pipeline.py`
+### 1.1 Wire PM2S into `pipeline.py` ✅
 
-Insert PM2S quantization between Transkun and music21. `quantize.py` already has the integration — port it into the main pipeline.
+PM2S replaces librosa BPM, pitch-60 hand split, and music21 key inference.
 
-**Replaces**: librosa BPM, pitch-60 hand split, music21 key inference
-**Files**: `python/pipeline.py`, `python/quantize.py` (reference)
+### 1.2 Enable time signature detection ✅
 
-### 1.2 Enable time signature detection
+CNN time signature model (2.6MB) enabled via `include_time_signature=True`.
 
-PM2S has a CNN time signature model (2.6MB) that's currently disabled (`include_time_signature=False`). Enable it.
+### 1.3 Hand-part classification ✅
 
-### 1.3 Investigate the quantisation RNN
+PM2S `RNNHandPartProcessor` splits notes into Left/Right Hand tracks. The full quantisation RNN was tested but introduced unacceptable onset drift (mean 119ms, max 459ms on short pieces) — replaced with hand-split-only approach that preserves original performance timing.
 
-The 186MB `RNNJointQuantisationModel` is downloaded but never used. PM2S falls back to simpler nearest-beat tick mapping. Investigate:
-- Does the quantisation processor work when called directly?
-- Does it produce meaningfully better onset positions than nearest-beat?
-- Can we modify `CRNNJointPM2S.convert()` to use it?
+### 1.4 Solo piano bypass ✅
 
-If it improves quality, integrate it. The model was trained specifically for this — it should outperform the heuristic.
+`--solo-piano` flag skips Demucs separation. UI toggle in UploadView, recordings default to solo.
 
-### 1.4 Solo piano bypass
+### 1.5 Sustain pedal ✅
 
-If the input is already solo piano (no other instruments), skip Demucs separation entirely. Saves 30-60s and avoids quality loss from unnecessary source separation round-trip.
+`apply_sustain_pedal()` from Transkun fork extends note durations based on CC64 events. Applied to performance MIDI only (not fed to PM2S, which expects key-press durations).
 
-Detection: Run a quick RMS check or use Demucs but compare piano stem energy to total energy. If piano is >90% of the mix, it's solo piano.
+### 1.6 MusicXML removal ✅
+
+Entire MusicXML/music21/OpenSheetMusicDisplay chain removed. App outputs MIDI only.
+
+### 1.7 MIDI playback ✅
+
+SplendidGrandPiano (smplr) with lazy AudioContext initialization on first user click. Multi-track playback with per-track mute. Playwright e2e tested.
 
 ---
 
-## Phase 2: Sustain Pedal + Better Transcription
+## Phase 2: Better Transcription
 
-**Goal**: Notes that sound right and reflect actual performance.
+**Goal**: More accurate notes and dynamics.
 
-### 2.1 Download and ship Transkun V2 pedal checkpoint
-
-The default `2.0.pt` was trained without pedal extension. A full Transkun V2 checkpoint exists that predicts CC64 sustain pedal events. Download it, ship it, and use it as the default.
-
-**Impact**: Notes extend through pedal sustain periods. MIDI playback sounds correct. Sheet music gets pedal markings.
-
-### 2.2 Tune Transkun post-processing thresholds
+### 2.1 Tune Transkun post-processing thresholds
 
 Current fixed thresholds: `min_duration=0.03`, `merge_window=0.015`, `min_velocity=5`
 
@@ -57,7 +53,7 @@ These need tuning based on real-world results:
 
 Test on a diverse set of recordings (classical, pop, jazz) and adjust.
 
-### 2.3 Transkun velocity criterion
+### 2.2 Transkun velocity criterion
 
 Transkun supports multiple velocity estimation methods:
 - `hamming` (default): Most likely velocity (mode)
@@ -66,39 +62,20 @@ Transkun supports multiple velocity estimation methods:
 
 Test which produces the most musically accurate dynamics. `hamming` may not be the best choice.
 
----
+### 2.3 Audio preprocessing
 
-## Phase 3: Notation Quality
-
-**Goal**: Sheet music that looks professionally typeset.
-
-### 3.1 MusicXML post-processing
-
-After music21 generates MusicXML, clean up:
-- Excessive ties (merge tied notes into single longer notes where possible)
-- Beam grouping (ensure eighth notes are beamed by beat, not arbitrarily)
-- Rest consolidation (merge adjacent rests into single longer rests)
-- Remove redundant accidentals
-
-### 3.2 Simplification mode
-
-For intermediate pianists, offer a "simplified" output:
-- Remove ornamental notes below a velocity threshold
-- Reduce dense chords to triads
-- Simplify complex rhythms (triple-dotted → simpler approximation)
-- This is a post-processing step on the quantized MIDI, before music21
-
-### 3.3 Fingering suggestions
-
-Not ML — rule-based fingering based on hand span, common patterns, and voice leading. Applied as annotations in MusicXML.
+Before Demucs/Transkun:
+- Normalize volume (peak normalization)
+- Remove silence at start/end
+- Optional noise reduction for poor recordings
 
 ---
 
-## Phase 4: Broader Audio Support
+## Phase 3: Broader Audio Support
 
 **Goal**: Work well on more than just concert Steinway recordings.
 
-### 4.1 Evaluate alternative transcription models
+### 3.1 Evaluate alternative transcription models
 
 - **hFT-Transformer**: Newer transformer-based piano transcription
 - **Kong's Piano Transcription Transformer**: Strong Onset+Frame model
@@ -106,29 +83,20 @@ Not ML — rule-based fingering based on hand span, common patterns, and voice l
 
 Benchmark against Transkun V2 on a test set of diverse recordings. If one is significantly better on non-MAESTRO audio, add it as an option or replace Transkun.
 
-### 4.2 Audio preprocessing
-
-Before Demucs/Transkun:
-- Normalize volume (peak normalization)
-- Remove silence at start/end
-- Optional noise reduction for poor recordings
-
-### 4.3 Multi-instrument support
+### 3.2 Multi-instrument support
 
 Currently piano-only. Eventually:
 - Use Demucs stems to transcribe each instrument separately
 - Combine into a full score with multiple parts
 - Each instrument needs its own transcription model (or a general-purpose one)
 
-This is a large scope expansion — Phase 4+ territory.
-
 ---
 
-## Phase 5: User Controls
+## Phase 4: User Controls
 
 **Goal**: Let users fix what the ML gets wrong.
 
-### 5.1 Override tempo / key / time signature
+### 4.1 Override tempo / key / time signature
 
 The UI should let users:
 - Set or override tempo (global BPM or tap-tempo)
@@ -137,25 +105,18 @@ The UI should let users:
 
 These override PM2S predictions when the user knows better.
 
-### 5.2 Quantization strength
-
-Slider: strict → loose
-- Strict: snap everything to the nearest grid position
-- Loose: preserve some timing nuance (swing, rubato)
-
-### 5.3 Difficulty level
+### 4.2 Difficulty level
 
 Slider or preset: beginner → advanced
 - Beginner: simplified rhythms, no ornaments, basic chords
 - Advanced: full transcription with all detail
 
-### 5.4 Interactive correction
+### 4.3 Interactive correction
 
-Let users click on notes in the sheet music to:
-- Move to a different beat position
-- Change duration
+Let users click on notes to:
 - Switch hand assignment
 - Delete spurious notes
+- Adjust velocity
 
 This is significant UI work but transforms the tool from "take it or leave it" to "start with AI, refine by hand."
 
@@ -163,15 +124,18 @@ This is significant UI work but transforms the tool from "take it or leave it" t
 
 ## Priority Order
 
-| Phase | Effort | Impact | Status |
-|-------|--------|--------|--------|
-| 1.1 PM2S in pipeline | Low | **Transformative** | `quantize.py` exists |
-| 1.2 Time signature | Trivial | Medium | One flag flip |
-| 1.3 Quantisation RNN | Medium | High | Investigation needed |
-| 1.4 Solo piano bypass | Low | Medium | Not started |
-| 2.1 Pedal checkpoint | Low | High | Download + flag |
-| 2.2 Threshold tuning | Medium | Medium | Needs test set |
-| 3.1 MusicXML cleanup | Medium | Medium | Not started |
-| 5.1 User overrides | Medium | High | UI + pipeline |
-| 4.1 Alt models | High | Variable | Research needed |
-| 5.4 Interactive editing | High | High | Major UI feature |
+| Task | Effort | Impact | Status |
+|------|--------|--------|--------|
+| 1.1 PM2S in pipeline | Low | Transformative | ✅ Done |
+| 1.2 Time signature | Trivial | Medium | ✅ Done |
+| 1.3 Hand-part classification | Medium | High | ✅ Done |
+| 1.4 Solo piano bypass | Low | Medium | ✅ Done |
+| 1.5 Sustain pedal | Low | High | ✅ Done |
+| 1.6 MusicXML removal | Medium | Simplification | ✅ Done |
+| 1.7 MIDI playback | Medium | High | ✅ Done |
+| 2.1 Threshold tuning | Medium | Medium | Next |
+| 2.2 Velocity criterion | Low | Medium | Not started |
+| 2.3 Audio preprocessing | Low | Medium | Not started |
+| 4.1 User overrides | Medium | High | Not started |
+| 3.1 Alt transcription models | High | Variable | Research needed |
+| 4.3 Interactive editing | High | High | Major UI feature |

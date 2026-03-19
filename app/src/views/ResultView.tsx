@@ -1,58 +1,60 @@
 import { Show } from 'solid-js'
 import { resetApp, appStore, audioUrl } from '../stores/appStore'
-import { musicxml, midiPath, perfMidiPath, metadata } from '../stores/pipelineStore'
+import { midiPath, perfMidiPath, metadata } from '../stores/pipelineStore'
 import PlaybackPanel from '../components/PlaybackPanel'
-import SheetMusic from '../components/SheetMusic'
-import MetadataPanel from '../components/MetadataPanel'
 import ExportBar from '../components/ExportBar'
+import AuroraFooter from '../components/AuroraFooter'
 import { ArrowLeft } from 'lucide-solid'
 
 export default function ResultView() {
+  const metadataLine = () => {
+    const meta = metadata()
+    if (!meta) return null
+    const parts: string[] = []
+    if (meta.key) parts.push(meta.key)
+    const ts = meta.timeSignature
+    if (ts?.length === 2) parts.push(`${ts[0]}/${ts[1]}`)
+    if (meta.tempo) parts.push(`${Math.round(meta.tempo)} BPM`)
+    return parts.join(' · ')
+  }
+
   return (
-    <div class="flex-1 flex flex-col h-full animate-fade-in">
-      <div class="flex items-center justify-between px-4 py-3 border-b border-border-glass">
-        <button
-          onClick={resetApp}
-          class="flex items-center gap-2 px-3 py-1.5 rounded-lg glass-hover text-sm transition-colors"
-        >
-          <ArrowLeft class="w-4 h-4" />
-          New
-        </button>
-        <span class="text-sm font-medium text-text-secondary">
-          {appStore.inputName}
-        </span>
-        <div class="w-16" />
+    <div class="flex-1 flex flex-col h-full animate-fade-in relative">
+      <button
+        onClick={resetApp}
+        class="absolute top-4 left-4 z-10 p-2 rounded-full transition-colors hover:bg-white/5"
+      >
+        <ArrowLeft class="w-5 h-5 text-text-secondary" />
+      </button>
+
+      <div class="flex-1 flex flex-col items-center justify-center gap-6 px-6 py-16">
+        <Show when={appStore.inputName}>
+          <span class="text-xs text-text-secondary tracking-wide">
+            {appStore.inputName}
+          </span>
+        </Show>
+
+        <Show when={audioUrl()}>
+          {(url) => (
+            <PlaybackPanel
+              audioUrl={url()}
+              scoreMidiPath={midiPath()}
+              perfMidiPath={perfMidiPath()}
+              instruments={metadata()?.instruments}
+            />
+          )}
+        </Show>
+
+        <Show when={metadataLine()}>
+          <span class="text-xs text-text-secondary tracking-wide">
+            {metadataLine()}
+          </span>
+        </Show>
+
+        <ExportBar inputName={appStore.inputName || 'output'} midiPath={midiPath()} />
       </div>
 
-      <div class="flex-1 flex overflow-hidden">
-        <div class="w-56 flex-shrink-0 p-4 flex flex-col gap-6 overflow-y-auto border-r border-border-glass">
-          <Show when={metadata()}>
-            {(meta) => <MetadataPanel metadata={meta()} />}
-          </Show>
-
-          <Show when={musicxml()}>
-            {(xml) => <ExportBar musicxml={xml()} inputName={appStore.inputName || 'output'} midiPath={midiPath()} />}
-          </Show>
-        </div>
-
-        <div class="flex-1 flex flex-col p-4 gap-4 overflow-hidden">
-          <Show when={audioUrl()}>
-            {(url) => (
-              <PlaybackPanel
-                audioUrl={url()}
-                scoreMidiPath={midiPath()}
-                perfMidiPath={perfMidiPath()}
-              />
-            )}
-          </Show>
-
-          <div class="flex-1 overflow-auto">
-            <Show when={musicxml()}>
-              {(xml) => <SheetMusic musicxml={xml()} />}
-            </Show>
-          </div>
-        </div>
-      </div>
+      <AuroraFooter />
     </div>
   )
 }

@@ -1,12 +1,15 @@
-export type ProgressStage = 'separating' | 'transcribing' | 'quantizing' | 'generating' | 'done'
+export type ProgressStage = 'separating' | 'transcribing' | 'quantizing' | 'done'
+
+export type Backend = 'transkun' | 'yourmt3'
 
 export interface Audio2SheetsOptions {
+  backend?: Backend
   onProgress?: (stage: ProgressStage, percent: number) => void
 }
 
 export interface Audio2SheetsResult {
-  musicxml: string
-  stems: string[]
+  midi: string
+  perfMidi: string
   metadata: ScoreMetadata
 }
 

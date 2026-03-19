@@ -1,9 +1,7 @@
 import { createSignal, onCleanup } from 'solid-js'
 import { convertFileSrc } from '@tauri-apps/api/core'
-import { navigateTo, setInput } from '../stores/appStore'
-import { resetPipeline, updateProgress, setPipelineResult, setPipelineError } from '../stores/pipelineStore'
-import { startPipeline, saveRecording } from '../lib/commands'
-import { onPipelineProgress } from '../lib/events'
+import { navigateTo, setPendingPreview } from '../stores/appStore'
+import { saveRecording } from '../lib/commands'
 import { AudioRecorder } from '../lib/recorder'
 import LiveWaveform from '../components/LiveWaveform'
 import { Mic, Square } from 'lucide-solid'
@@ -41,22 +39,14 @@ export default function RecordingView() {
     const wavBuffer = await recorder.stop()
     const bytes = Array.from(new Uint8Array(wavBuffer))
 
-    resetPipeline()
-    navigateTo('processing')
-
     try {
       const path = await saveRecording(bytes)
       const audioUrl = convertFileSrc(path)
-      setInput(path, 'Recording', audioUrl)
-
-      const unsub = await onPipelineProgress((p) => updateProgress(p.stage, p.percent))
-      const output = path.replace(/\.wav$/, '.musicxml')
-      const result = await startPipeline(path, output, true)
-      setPipelineResult(result.musicxml, result.metadata, result.midi_path ?? undefined, result.perf_midi_path ?? undefined)
-      unsub()
-      navigateTo('result')
+      setPendingPreview(path, 'Recording', audioUrl)
+      navigateTo('upload')
     } catch (e: any) {
-      setPipelineError(typeof e === 'string' ? e : e.message || 'Pipeline failed')
+      console.error('Failed to save recording:', e)
+      navigateTo('upload')
     }
   }
 
@@ -95,7 +85,7 @@ export default function RecordingView() {
         class="px-8 py-3 rounded-2xl bg-accent hover:bg-accent/80 text-white font-medium transition-colors flex items-center gap-2"
       >
         <Square class="w-4 h-4" />
-        Stop & Analyze
+        Stop Recording
       </button>
     </div>
   )

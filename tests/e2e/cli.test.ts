@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { existsSync, unlinkSync } from 'fs'
 import { join } from 'path'
-import { tmpdir } from 'os'
-import { execFileAsync, hasVenv, hasPM2S, fixture } from '../helpers'
+import { execFileAsync, hasVenv, hasPM2S } from '../helpers'
 
 const CLI_PATH = join(__dirname, '..', '..', 'dist', 'cli.js')
 const HAS_FULL_STACK = hasVenv() && hasPM2S()
@@ -13,6 +11,7 @@ describe('CLI', () => {
     expect(stdout).toContain('audio2sheets')
     expect(stdout).toContain('Usage')
     expect(stdout).toContain('Commands')
+    expect(stdout).toContain('--backend')
   })
 
   it('shows version with --version', async () => {
@@ -31,18 +30,6 @@ describe('CLI', () => {
 })
 
 describe.skipIf(!HAS_FULL_STACK)('CLI e2e', () => {
-  it('converts fixture WAV to MusicXML', async () => {
-    const output = join(tmpdir(), 'test-cli-e2e.musicxml')
-    try {
-      await execFileAsync('node', [CLI_PATH, fixture('single-c4.wav'), '-o', output], {
-        timeout: 120_000,
-      })
-      expect(existsSync(output)).toBe(true)
-    } finally {
-      if (existsSync(output)) unlinkSync(output)
-    }
-  })
-
   it('info command returns JSON', async () => {
     const { stdout } = await execFileAsync('node', [CLI_PATH, 'info'], {
       timeout: 60_000,

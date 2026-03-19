@@ -9,3 +9,7 @@ models/
 mp3_files/
 *.mp3
 app/src-tauri/target/
+tests/browser/*.bundle.js
+yourmt3/
+.claude/
+test-results/
