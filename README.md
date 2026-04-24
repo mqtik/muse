@@ -27,7 +27,7 @@
 ---
 
 <p align="center">
-  [video.webm](https://github.com/user-attachments/assets/65b20771-5be7-44c4-bcd5-c798385f4b20)
+  <video src="https://github.com/user-attachments/assets/65b20771-5be7-44c4-bcd5-c798385f4b20" autoplay loop muted playsinline width="100%"></video>
 </p>
 
 ---
