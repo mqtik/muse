@@ -54,7 +54,7 @@ echo "==> Current version: $CURRENT_VERSION"
 if [[ "${SKIP_BUMP:-}" != "1" ]]; then
   echo ""
   echo "==> Step 1: Pre-flight checks"
-  if [[ -n "$(git -C "$REPO_ROOT" status --porcelain)" ]]; then
+  if [[ -n "$(git -C "$REPO_ROOT" status --porcelain | grep -v '^??')" ]]; then
     echo "ERROR: Uncommitted changes. Commit or stash first."
     exit 1
   fi
