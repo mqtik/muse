@@ -79,7 +79,7 @@ fi
 
 echo ""
 echo "==> Step 3: Build"
-npm run tauri build
+npm run tauri -- build --bundles dmg
 
 ARCH="$(uname -m)"
 if [[ "$ARCH" == "arm64" ]]; then
