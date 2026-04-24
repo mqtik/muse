@@ -206,7 +206,7 @@ Picking the transcription model required trading off accuracy, runtime, and depl
 
 Transkun V2 won on accuracy and a clean Python API. Basic Pitch was an early candidate but its tendency to hallucinate overtones as real notes — harmonics at the 12th, 19th, and 24th above a played note — was difficult to suppress reliably.
 
-**On quantization**: PM2S ships a quantization RNN alongside its hand-splitting model. We measured ~164ms mean onset drift (p95: 385ms) — audible artifacts on anything with fast passages. The hand-splitting RNN is excellent; the quantization RNN is not. We dropped it and ship both a quantized score MIDI and a raw performance MIDI instead.
+**On quantization**: PM2S ships a quantization RNN alongside its hand-splitting model. I measured ~164ms mean onset drift (p95: 385ms) — audible artifacts on anything with fast passages. The hand-splitting RNN is excellent; the quantization RNN is not. I dropped it and ship both a quantized score MIDI and a raw performance MIDI instead.
 
 **On multi-instrument**: Running Demucs → per-stem transcription compounds errors — separation artifacts become transcription errors, which then merge into a broken multi-track output. YourMT3+ handles everything in one shot. Cleaner pipeline, better output.
 
