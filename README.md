@@ -204,6 +204,8 @@ Picking the transcription model required trading off accuracy, runtime, and depl
 | **Transkun V2** | Medium | **96–97%** | Python subprocess |
 | MT3 family | ~300M+ | N/A | No (autoregressive) |
 
+MT3 (and MR-MT3, YourMT3 in text-generation mode) are based on T5 — a text generation Transformer that produces output one token at a time, each step depending on all previous ones. Transcribing a 30-second clip means thousands of sequential decode steps with no parallelism. On a local machine without a beefy GPU this takes several minutes for a short clip, and there's no way around it — it's fundamental to how the architecture works. Every other model in the table does a single forward pass over the audio and predicts all notes at once.
+
 Transkun V2 won on accuracy and a clean Python API. Basic Pitch was an early candidate but its tendency to hallucinate overtones as real notes — harmonics at the 12th, 19th, and 24th above a played note — was difficult to suppress reliably.
 
 **On quantization**: PM2S ships a quantization RNN alongside its hand-splitting model. I measured ~164ms mean onset drift (p95: 385ms) — audible artifacts on anything with fast passages. The hand-splitting RNN is excellent; the quantization RNN is not. I dropped it and ship both a quantized score MIDI and a raw performance MIDI instead.
