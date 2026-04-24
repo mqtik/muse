@@ -27,7 +27,7 @@
 ---
 
 <p align="center">
-  <video src="public/video.webm" autoplay loop muted playsinline width="100%"></video>
+  <video src="https://github.com/mqtik/muse/raw/main/public/video.webm" autoplay loop muted playsinline width="100%"></video>
 </p>
 
 ---
