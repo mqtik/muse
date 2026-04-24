@@ -1,0 +1,23 @@
+{
+  "git": {
+    "commitMessage": "release v${version}",
+    "tagName": "v${version}"
+  },
+  "github": {
+    "release": false
+  },
+  "npm": {
+    "publish": false
+  },
+  "plugins": {
+    "@release-it/bumper": {
+      "out": [
+        "app/package.json",
+        {
+          "path": "app/src-tauri/tauri.conf.json",
+          "type": "application/json"
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { Show } from 'solid-js'
-import { Download, ExternalLink } from 'lucide-solid'
+import { Download } from 'lucide-solid'
 import { save } from '@tauri-apps/plugin-dialog'
 import { copyFile } from '@tauri-apps/plugin-fs'
 
@@ -34,13 +34,6 @@ export default function ExportBar(props: ExportBarProps) {
         </button>
       </Show>
 
-      <button
-        class="flex items-center gap-2 px-4 py-2 rounded-full text-sm text-text-secondary hover:text-text-primary transition-colors hover:bg-white/5"
-        onClick={() => {}}
-      >
-        <ExternalLink class="w-4 h-4" />
-        Open in Piano
-      </button>
     </div>
   )
 }

@@ -96,17 +96,9 @@ Key Python dependencies: `torch`, `demucs`, `librosa`, `transkun` (custom fork),
 
 ## Testing Standards
 
-### Spec-Driven Workflow
-
-1. `/write-spec <source-file>` — scaffold spec from public API, human reviews
-2. `/test-spec <spec-file>` — generate tests from approved spec
-3. `/test-validate` — check coverage and quality
-4. Never generate tests directly from source code
-
 ### What to Test
 
 - User-visible behavior and public API outcomes
-- Every test maps to a spec behavior in `specs/`
 - Test observable outcomes, not internal state
 
 ### How to Write Tests

@@ -13,3 +13,4 @@ tests/browser/*.bundle.js
 yourmt3/
 .claude/
 test-results/
+public/video.mov
