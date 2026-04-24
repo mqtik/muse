@@ -18,6 +18,11 @@ if [[ -z "${RELEASE_REPO:-}" ]]; then
   exit 1
 fi
 
+if ! gh auth status &>/dev/null; then
+  echo "ERROR: gh CLI is not authenticated. Run: gh auth login"
+  exit 1
+fi
+
 read_version() {
   python3 -c "import json; print(json.load(open('src-tauri/tauri.conf.json'))['version'])"
 }
@@ -43,19 +48,22 @@ for path in ["src-tauri/tauri.conf.json", "package.json"]:
 EOF
 }
 
+echo ""
+echo "==> Step 1: Pre-flight checks"
+if [[ -n "$(git -C "$REPO_ROOT" status --porcelain | grep -v '^??')" ]]; then
+  echo "ERROR: Uncommitted changes. Commit or stash first."
+  exit 1
+fi
+
+echo "Pulling latest..."
+git -C "$REPO_ROOT" pull --ff-only
+
 cd "$APP_DIR"
 
 CURRENT_VERSION="$(read_version)"
 echo "==> Current version: $CURRENT_VERSION"
 
-if [[ "${SKIP_BUMP:-}" != "1" ]]; then
-  echo ""
-  echo "==> Step 1: Pre-flight checks"
-  if [[ -n "$(git -C "$REPO_ROOT" status --porcelain | grep -v '^??')" ]]; then
-    echo "ERROR: Uncommitted changes. Commit or stash first."
-    exit 1
-  fi
-
+if [[ "${BUMP:-}" == "1" ]]; then
   echo ""
   echo "==> Step 2: Version bump"
   NEW_VERSION="$(bump_version "$CURRENT_VERSION")"
@@ -71,7 +79,7 @@ if [[ "${SKIP_BUMP:-}" != "1" ]]; then
 
   CURRENT_VERSION="$NEW_VERSION"
 else
-  echo "Skipping version bump (SKIP_BUMP=1)"
+  echo "Using existing version $CURRENT_VERSION (run with BUMP=1 to increment)"
 fi
 
 echo ""
